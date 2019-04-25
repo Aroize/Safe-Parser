@@ -1,5 +1,8 @@
 package expression.tokenizer;
 
+import expression.exceptions.ParserException;
+import expression.parser.Parser;
+
 public class Tokenizer {
     private Token currentToken;
     private Token prevToken;
@@ -21,7 +24,19 @@ public class Tokenizer {
         currentToken = Token.START;
     }
 
-    private String getConst() throws NumberFormatException{
+    private void checkPattern(String pattern) throws ParserException {
+        if(index + pattern.length() - 1 >= expression.length())
+            throw new ParserException("Exprected " + pattern + ", found end of expression");
+        int start = index - 1;
+        while (index < expression.length() && Character.isLetterOrDigit(expression.charAt(index)))
+            index++;
+        String command = expression.substring(start, index);
+        if(!command.equals(pattern))
+            throw new ParserException("Expected " + pattern + ", found " + command + " at index " + (index - 1));
+    }
+
+
+    private String getConst() {
         int start = index - 1;
         while(index < expression.length() && Character.isDigit(expression.charAt(index)))
             index++;
@@ -40,7 +55,7 @@ public class Tokenizer {
         return Character.toString(expression.charAt(index - 1));
     }
 
-    public Token nextToken() {
+    public Token nextToken() throws ParserException{
         prevToken = currentToken;
         skipNull();
         if(index >= expression.length())
@@ -82,6 +97,37 @@ public class Tokenizer {
             }
             case ')': {
                 return currentToken = Token.R_BRANCH;
+            }
+            case 'a': {
+                checkPattern("abs");
+                return currentToken = Token.ABS;
+            }
+            case 's': {
+                checkPattern("sqrt");
+                return currentToken = Token.SQRT;
+            }
+            case 'l': {
+                checkPattern("log2");
+                return currentToken = Token.LOG;
+            }
+            case 'p': {
+                checkPattern("pow2");
+                return currentToken = Token.POW;
+            }
+            case 'm': {
+                switch (expression.charAt(index)) {
+                    case 'i': {
+                        checkPattern("min");
+                        return currentToken = Token.MIN;
+                    }
+                    case 'a': {
+                        checkPattern("max");
+                        return currentToken = Token.MAX;
+                    }
+                    default: {
+                        throw new ParserException("Expected 'min' or 'max', found " + expression.substring(index - 1, index + 1));
+                    }
+                }
             }
             default: {
                 if(Character.isDigit(expression.charAt(index - 1))) {

@@ -1,36 +1,32 @@
 package expression.parser;
 
-import com.sun.istack.internal.Nullable;
 import expression.*;
 import expression.exceptions.LostClosingBranch;
+import expression.exceptions.ParserException;
 import expression.tokenizer.*;
-import jdk.nashorn.internal.runtime.ParserException;
-import org.jetbrains.annotations.Contract;
 
 public class ExpressionParser implements Parser {
 
     private Tokenizer tokenizer;
     private Token currentToken;
 
-    @Contract(pure = true)
     private int fromTokenToInt(Token token) {
         switch (token) {
-            case PLUS: return 0b1;
+            case MIN:
+            case MAX: return 0b1;
+            case PLUS:
             case MINUS: return 0b11;
-            case MULT: return 0b100;
+            case MULT:
             case DIV: return 0b1100;
         }
         return 0;
     }
 
-    @Contract(pure = true)
     public ExpressionParser() {
         tokenizer = new Tokenizer();
     }
 
-    @org.jetbrains.annotations.Nullable
-    @Nullable
-    private TripleExpression simpleToken() throws ParserException, LostClosingBranch{
+    private TripleExpression simpleToken() throws ParserException {
         switch (currentToken) {
             case VAR: {
                 TripleExpression Var = new Variable(tokenizer.getVariable());
@@ -50,11 +46,27 @@ public class ExpressionParser implements Parser {
                 currentToken = tokenizer.nextToken();
                 return parseBranches();
             }
+            case LOG: {
+                currentToken = tokenizer.nextToken();
+                return new CheckedLog(simpleToken());
+            }
+            case POW: {
+                currentToken = tokenizer.nextToken();
+                return new CheckedPow(simpleToken());
+            }
+            case ABS: {
+                currentToken = tokenizer.nextToken();
+                return new CheckedAbs(simpleToken());
+            }
+            case SQRT: {
+                currentToken = tokenizer.nextToken();
+                return new CheckedSqrt(simpleToken());
+            }
         }
         throw new ParserException("Expected operand, found: " + tokenizer.getCurrentToken() + " at index " + (tokenizer.getIndex() - 1) + "\n" + tokenizer.getExpression());
     }
 
-    private TripleExpression parseExpr(int predicate) throws LostClosingBranch {
+    private TripleExpression parseExpr(int predicate) throws ParserException {
         TripleExpression expression = simpleToken();
         while(currentToken != Token.END && (fromTokenToInt(currentToken) & predicate) != 0
         ) {
@@ -63,7 +75,7 @@ public class ExpressionParser implements Parser {
         return expression;
     }
 
-    private TripleExpression parseBranches() throws ParserException, LostClosingBranch {
+    private TripleExpression parseBranches() throws ParserException {
         TripleExpression expression = simpleToken();
         while (currentToken != Token.END && currentToken != Token.R_BRANCH) {
             expression = loopParse(expression);
@@ -74,7 +86,7 @@ public class ExpressionParser implements Parser {
         return expression;
     }
 
-    private TripleExpression loopParse(TripleExpression expression) throws LostClosingBranch{
+    private TripleExpression loopParse(TripleExpression expression) throws ParserException{
         currentToken = tokenizer.nextToken();
         switch (tokenizer.getPrevToken()) {
             case PLUS: {
@@ -93,6 +105,14 @@ public class ExpressionParser implements Parser {
                 expression = new CheckedDivide(expression, simpleToken());
                 break;
             }
+            case MIN: {
+                expression = new Minimum(expression, parseExpr(0b10));
+                break;
+            }
+            case MAX: {
+                expression = new Maximum(expression, parseExpr(0b10));
+                break;
+            }
             default:
                 throw new ParserException("Expected operator, found: " + tokenizer.getCurrentToken() + " at index " + (tokenizer.getIndex() - 1) + "\n" + tokenizer.getExpression());
         }
@@ -100,7 +120,7 @@ public class ExpressionParser implements Parser {
     }
 
     @Override
-    public TripleExpression parse(String expression) throws LostClosingBranch {
+    public TripleExpression parse(String expression) throws ParserException {
         tokenizer.setExpression(expression);
         currentToken = tokenizer.nextToken();
         TripleExpression currentExpression = simpleToken();
